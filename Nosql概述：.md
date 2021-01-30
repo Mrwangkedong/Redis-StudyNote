@@ -246,7 +246,7 @@ OK
 
 官方表示，redis是基于内存操作的，cpu不是Redis的瓶颈，Redis的瓶颈是很具机器的内存和网络带宽，既然可以使用单线程来实现，那就使用单线程了~
 
-Redis是C语言写的，完全不比同样使用key-value的Memecache差！
+Redis是C语言写的，完全不比同样使用key-value的Memecache差！！
 
 > Redis为什么单线程更快？
 
