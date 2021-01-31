@@ -433,13 +433,488 @@ OK
 
 
 
-##### List
+##### List（列表）
 
-##### Set
+基本的数据类型，列表
 
-##### Hash
+在Redis，我们课以把list实现为队列、栈，串。
 
-##### Zset
+> 所有的List命令
+
+```bash
+##############向list头部添加值（lpush）########################
+127.0.0.1:6379> lpush list one             #压入one -> list
+(integer) 1		#成功 
+127.0.0.1:6379> lpush list two			   #压入two -> list
+(integer) 2     #成功
+127.0.0.1:6379> lrange list 0 1				#查看所有list，相当于栈
+1) "two"
+2) "one"
+127.0.0.1:6379> lrange list 0 0				#list[0] = two 
+1) "two"
+127.0.0.1:6379> lrange list 1 1			#list[1]=one
+1) "one"
+##############向list尾部添加值（rpush）########################
+127.0.0.1:6379> rpush list 1			#向尾部添加一个  rpush key element
+(integer) 3
+127.0.0.1:6379> lrange list 0 -1		
+1) "two"	
+2) "one"
+3) "1"
+127.0.0.1:6379> rpush list 2 3 4			#同时添加多个   rpush key element1，element2，element3.....
+(integer) 6
+```
+
+向左向右移除（==LPOP==  || ==RPOP==）
+
+```bash
+127.0.0.1:6379> lpop list        #移除最左边的元素
+"two"
+127.0.0.1:6379> lrange list 0 -1		#查看所有
+1) "one"
+2) "1"
+3) "2"
+4) "3"
+5) "4"
+127.0.0.1:6379> rpop list		#移除最右边元素
+"4"
+127.0.0.1:6379> lrange list 0 -1	#查看所有
+1) "one"
+2) "1"
+3) "2"
+4) "3"
+```
+
+移除list中的具体值 ==lrem==
+
+```bash
+127.0.0.1:6379> lrange list 0 -1         #查看当前数据库中的值
+1) "one"
+2) "1"
+3) "2"
+4) "3"
+5) "3"
+127.0.0.1:6379> lrem list 1 one     #lrem key count element   移除list中的一个one
+(integer) 1
+127.0.0.1:6379> lrange list 0 -1		#移除后的list
+1) "1"
+2) "2"
+3) "3"
+4) "3"
+127.0.0.1:6379> lrem list 2 3		#移除list中的两个3
+(integer) 2	
+127.0.0.1:6379> lrange list 0 -1	#移除后的list
+1) "1"
+2) "2"
+```
+
+截取list中的==list[star,stop]==，关键字==ltrim==，移除剩余的
+
+```bash
+127.0.0.1:6379> lrange list 0 -1      #查看当前list
+1) "h5"
+2) "h4"
+3) "h3"
+4) "h2"
+5) "h1"
+6) "h0"
+127.0.0.1:6379> ltrim list 0 2		#截取[0,2]，其他的被抛弃
+OK
+127.0.0.1:6379> lrange list 0 -1
+1) "h5"
+2) "h4"
+3) "h3"
+```
+
+移除==当前数组===最右边的值，并添加到==另一个数组==的最左边（==rpoplpush==）
+
+```bash
+127.0.0.1:6379> lrange list 0 -1            #查看当前list
+1) "h5" 
+2) "h4"
+3) "h3"
+127.0.0.1:6379> rpoplpush list otherlist		#将移除list最右边的值，并将其添加到otherlist的最左边
+"h3"
+127.0.0.1:6379> lrange otherlist 0 -1  		#查看otherlist
+1) "h3"
+127.0.0.1:6379> lrange list 0 -1		#查看list
+1) "h5"
+2) "h4"
+```
+
+==更新操作==，改变指定下标元素值==lset==
+
+```bash
+127.0.0.1:6379> lrange list 0 -1
+1) "h5"
+2) "h4"
+127.0.0.1:6379> lset list 0 h1    #lset key index newValue
+OK
+127.0.0.1:6379> lrange list 0 -1
+1) "h1"
+2) "h4"
+127.0.0.1:6379> lset list 3 h1       #超出list范围报错
+(error) ERR index out of range
+```
+
+==插入操作==，插入到指定元素前面/后面（==before/after==)，==linsert==
+
+```bash
+127.0.0.1:6379> linsert list before h1 h888      #在h1前面before插入  h888
+(integer) 3
+127.0.0.1:6379> lrange list 0 -1	#查看当前list
+1) "h888"
+2) "h1"
+3) "h4"
+127.0.0.1:6379> linsert list after h1 h888   #在h1后面after插入  h888
+(integer) 4
+127.0.0.1:6379> lrange list 0 -1		#查看当前list
+1) "h888"
+2) "h1"
+3) "h888"
+4) "h4"
+```
+
+查看index = num 上的值==lindex==
+
+```bash
+127.0.0.1:6379> lindex list 1   #lindex key index  查看下标为1的值
+"1" 
+```
+
+查看list的length==llen==
+
+```bash
+127.0.0.1:6379> llen list  #Llist key 查看list的长度
+(integer) 4
+```
+
+> 小结
+
+- 他实际上是一个链表，before Node after，left，right都可以插入值
+- 如果key不存在，创建新的链表
+- 如果key存在，新增内容
+- 如果移除了所有值，空链表，也代表不存在！
+- 在两边插入或者改动值，效率最高！中间元素，相对来说效率会低一点-
+
+##### Set（集合）
+
+set中的值是不能被重复的！！！
+
+向set中==添加==值，==sadd==
+
+```bash
+127.0.0.1:6379> sadd myset hello         #添加值
+(integer) 1
+127.0.0.1:6379> sadd myset wkd         #添加值
+(integer) 1
+127.0.0.1:6379> sadd myset gogogo         #添加值
+(integer) 1
+127.0.0.1:6379> smembers myset         #查看set全部元素
+1) "hello"
+2) "wkd"
+3) "gogogo"
+127.0.0.1:6379> sadd myset hello         #添加**已存在**值
+(integer) 0						#错误，添加失败
+```
+
+查看set中是否==存在==某个值，==SISMEMBER key member==
+
+```bash
+127.0.0.1:6379> sismember myset hello          #查看已存在值
+(integer) 1								#存在
+127.0.0.1:6379> sismember myset helloo			#查看不存在之
+(integer) 0							#不存在
+```
+
+获取当前==set的length==，scard key
+
+```bash
+127.0.0.1:6379> scard myset       #查看当前set的长度
+(integer) 3			#3
+127.0.0.1:6379> sadd myset world	#添加
+(integer) 1
+127.0.0.1:6379> scard myset			#查看添加后的长度
+(integer) 4				#4
+```
+
+移除set中的指定元素  ==srem key element==
+
+```bash
+127.0.0.1:6379> smembers myset   #查看当前set中的值
+1) "hello"
+2) "world"
+3) "wkd"
+4) "gogogo"
+127.0.0.1:6379> srem myset gogogo  #移除set中的gogogo元素
+(integer) 1		#成功
+127.0.0.1:6379> srem myset gogogo	#再移除
+(integer) 0		#失败，因为已经没有了
+127.0.0.1:6379> smembers myset    #查看移除后的set
+1) "hello"
+2) "world"
+3) "wkd"
+```
+
+从set中==随机抽取==元素，SRANDMEMBER key [count]/可选
+
+```bash
+127.0.0.1:6379> SRANDMEMBER myset    #随机抽取一个元素
+"wkd"
+127.0.0.1:6379> SRANDMEMBER myset    #随机抽取一个元素
+"hello"
+127.0.0.1:6379> SRANDMEMBER myset    #随机抽取一个元素
+"hello"
+127.0.0.1:6379> SRANDMEMBER myset 2    #随机抽取两个个元素
+1) "hello"
+2) "wkd"
+```
+
+移除随机的elemeber ==spop key==
+
+```bash
+127.0.0.1:6379> spop myset
+"hello"
+127.0.0.1:6379> spop myset
+"wkd"
+127.0.0.1:6379> SMEMBERS myset
+1) "world"
+```
+
+将一个指定元素==移动到另一个se==t中, ==smove source destination member==
+
+```bash
+127.0.0.1:6379> SMEMBERS myset
+1) "hello"
+2) "world"
+127.0.0.1:6379> SMOVE myset otherset hello
+(integer) 1
+127.0.0.1:6379> keys *
+1) "myset"
+2) "otherset"
+127.0.0.1:6379> SMEMBERS myset
+1) "world"
+127.0.0.1:6379> SMEMBERS otherset
+1) "hello"
+```
+
+差集（==SDIFF==），并集（==SUNION==），交集（==SINTER==）
+
+```bash
+127.0.0.1:6379> SMEMBERS otherset
+1) "hello"
+127.0.0.1:6379> SMEMBERS myset
+1) "hello"
+2) "world"
+127.0.0.1:6379> SDIFF myset otherset       #myset与otherset的差集
+1) "world"
+127.0.0.1:6379> SINTER myset otherset	   #myset与otherset的交集
+1) "hello"
+127.0.0.1:6379> SUNION myset otherset		#myset与otherset的并集
+1) "hello"
+2) "world"
+```
+
+##### Hash（哈希）
+
+Map集合，key-map！这时候这个值是一个map集合！本质和string没有本质的区别，还是一个简单的key-value
+
+给hash赋值  ==hset key field value==
+
+```bash
+127.0.0.1:6379> HSET myhash field value1		#设置myhash -- field -- value1
+(integer) 1
+127.0.0.1:6379> HSET myhash field value2		#设置myhash -- field -- value2，被覆盖掉
+(integer) 0
+127.0.0.1:6379> HGET myhash field
+"value2"
+127.0.0.1:6379> HSET myhash field value1    
+(integer) 0
+127.0.0.1:6379> HGET myhash field		#获取hash值
+"value1"
+127.0.0.1:6379> HGETALL myhash			#获取key中的全部hash值
+1) "field"
+2) "value1"
+3) "field2"
+4) "value3"
+127.0.0.1:6379> HMSET myset field1 value1 field2 value2    #一次性设置多个
+OK   #设置成功
+127.0.0.1:6379> HMGET myset field1 field2		#一次性获取多个
+1) "value1"
+2) "value2"
+```
+
+==删除==某个field，==HDEL key field==
+
+```bash
+127.0.0.1:6379> HGETALL myhash  #查看删除前
+1) "field1"
+2) "value1"
+3) "field2"
+4) "value2"
+127.0.0.1:6379> HDEL myhash field1   #删除myhash 中的 field1
+(integer) 1
+127.0.0.1:6379> HGETALL myhash    #查看删除后
+1) "field2"
+2) "value2"
+```
+
+获取hash的==字段数量==，==HLEN key==
+
+```bash
+127.0.0.1:6379> HLEN myhash        #获取当前length
+(integer) 1
+127.0.0.1:6379> hSET myhash field1 value1       #添加一个
+(integer) 1
+127.0.0.1:6379> HLEN myhash			#再次获取
+(integer) 2
+```
+
+判断hash中的==某个field是否存在==   ，==HEXISIT key field==
+
+```bash
+127.0.0.1:6379> HEXISTS myhash field1
+(integer) 1
+127.0.0.1:6379> HEXISTS myhash field3
+(integer) 0
+```
+
+只获得所有的field   ==HKEYS==
+
+只获取所有的value，==HVALS==
+
+```bash
+127.0.0.1:6379> HKEYS myhash
+1) "field2"
+2) "field1"
+127.0.0.1:6379> HVALS myhash
+1) "value2"
+2) "value1"
+```
+
+当value为int时候，==增加或者减少==，==HINCRBY key field increment==
+
+```bash
+127.0.0.1:6379> HSET myhash field3 5
+(integer) 1
+127.0.0.1:6379> HINCRBY myhash field3 2
+(integer) 7
+127.0.0.1:6379> HGET myhash field3
+"7"
+```
+
+如果不存在则创建，存在则报错 ==hsetnx key field value==
+
+```bash
+127.0.0.1:6379> HSETNX myhash field3 88       #field3 存在
+(integer) 0
+127.0.0.1:6379> HSETNX myhash field4 88		#field4不存在
+(integer) 1
+127.0.0.1:6379> HGET myhash field4    #查看field4
+"88"
+```
+
+>hash变更的数据user name age，尤其是是用户信息之类的，经常变动的信息！hash更适合于对象的存储，String更加适合字符串存储！
+
+##### Zset（有序集合）（Sorted set）
+
+> 在set的基础上，增加了一个值，set k1 v1 ---  zset k1 sort v1
+>
+> 官网命令地址：http://redis.cn/commands.html#sorted_set
+
+```bash
+##########增加值############
+#ZADD key [NX|XX] [CH] [INCR] score member [score member ...]
+127.0.0.1:6379> zadd zset 1 one              #添加新成员
+(integer) 1
+127.0.0.1:6379> zadd zset 2 two
+(integer) 1
+127.0.0.1:6379> zadd zset 5 five
+(integer) 1
+127.0.0.1:6379> zadd zset 4 four
+(integer) 1
+127.0.0.1:6379> ZRANGE zset 0 -1 withscores   #展示全部
+1) "one"
+2) "1"
+3) "two"
+4) "2"
+5) "four"
+6) "4"
+7) "five"
+8) "5"
+```
+
+**排序**（返回有序集合中指定分数score区间内的成员，分数由低到高）==ZRANGEBYSCORE key min max [WITHSCORES] [LIMIT offset count]==
+
+==ZREVRANGEBYSCORE==高到低排序
+
+```bash
+127.0.0.1:6379> ZRANGEBYSCORE zset 1 4     #展示score属于[1,4]elements
+1) "one"
+2) "two"
+3) "four"
+#以正无穷、负无穷为边界  +INF  -INF
+127.0.0.1:6379> ZRANGEBYSCORE zset -inf +inf      #展示score属于[-oo,+oo]elements
+1) "one"
+2) "two"
+3) "four"
+4) "five"
+```
+
+移除某个元素   ==ZREM key member [member ...]==
+
+```bash
+127.0.0.1:6379> ZRANGEBYSCORE zset -inf +inf         #查看移除前的zset
+1) "one"
+2) "two"
+3) "four"
+4) "five"
+127.0.0.1:6379> ZREM zset five             #移除value为five的element
+(integer) 1
+127.0.0.1:6379> ZCARD zset      #移除后len-1
+(integer) 3
+```
+
+返回分数范围内的成员数量  ==ZCOUNT key min max==
+
+```bash
+127.0.0.1:6379> ZRANGEBYSCORE zset -inf +inf         #查看当前所有值
+1) "one"
+2) "two"
+3) "four"
+127.0.0.1:6379> ZCOUNT zset 1 3          #返回[1,3]中的值的数量
+(integer) 2
+127.0.0.1:6379> ZCOUNT zset (1 3		  #返回(1,3]中的值的数量
+(integer) 1
+```
+
+```bash
+#`ZLEXCOUNT` 命令用于计算有序集合中指定成员之间的成员数量。 ZLEXCOUNT key min max
+127.0.0.1:6379> ZLEXCOUNT myzset [b [d   
+(integer) 3
+127.0.0.1:6379> ZLEXCOUNT myzset [b (d
+(integer) 2
+127.0.0.1:6379> ZADD myzset 1 c        #将value=c的score重置为1
+(integer) 0
+127.0.0.1:6379> ZLEXCOUNT myzset [b (d        #返回结果中不再包括C，因为c的score不再是0
+(integer) 1
+```
+
+> zset案例思路
+>
+> set排序，存储版继承季报，工资表排序
+>
+> 普通消息 ，1；重要消息，2。带权重进行判断
+
+
+
+
+
+
+
+
+
+
 
 ### 三种特殊数据类型
 
