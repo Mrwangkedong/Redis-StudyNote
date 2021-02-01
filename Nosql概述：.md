@@ -906,20 +906,115 @@ OK   #设置成功
 >
 > 普通消息 ，1；重要消息，2。带权重进行判断
 
-
-
-
-
-
-
-
-
-
-
 ### 三种特殊数据类型
 
-##### geospatial
+##### geospatial（地理位置）
+
+>- 有效的经度从-180度到180度。
+>- 有效的纬度从-85.05112878度到85.05112878度。
+>- ==底层zset==！！！！利用zset的命令来删除、查看所有
+
+定位
+
+<img src="C:\Users\Cristiano-Ronaldo\AppData\Roaming\Typora\typora-user-images\image-20210201190559594.png" alt="image-20210201190559594" style="zoom:87%;" />
+
+==添加==一个或多个地理位置到sorted set，==GEOADD key longitude latitude member==。规则：两级无法直接添加
+
+==获取经纬度==，==GEOPOS key member==
+
+==获取两地之间的距离==，==GEODIST key member1 member2==
+
+```bash
+127.0.0.1:6379> GEOADD sicily 13.361389 38.115556 "Palermo"          #添加地点“Palermo”的经纬度
+(integer) 1
+127.0.0.1:6379> GEOADD sicily 15.087269 37.502669 "Catania"	        #添加地点“Catania”的经纬度
+(integer) 1
+127.0.0.1:6379> GEODIST sicily Palermo Catania            #计算两地之间的距离
+"166274.1516"
+127.0.0.1:6379> GEOpos sicily Palermo        #获取某地的经纬度
+1) 1) "13.36138933897018433"
+   2) "38.11555639549629859"
+```
+
+返回一个标准的==Gohash字符串==，==GEOHASH key member==
+
+```bash
+127.0.0.1:6379> GEOHASH sicily Catania
+1) "sqdtr74hyu0"
+```
+
+查询==某个**经纬点**指定半径内所有的地理空间元素==的集合，
+
+==GEORADIUS key longitude latitude radius(半径) m|km|ft|mi(单位) [WITHCOORD] [WITHDIST] [WITHHASH] [COUNT count]==
+
+![image-20210201193821254](C:\Users\Cristiano-Ronaldo\AppData\Roaming\Typora\typora-user-images\image-20210201193821254.png)
+
+>- `WITHDIST`: 在返回位置元素的同时， 将位置元素与中心之间的距离也一并返回。 距离的单位和用户给定的范围单位保持一致。
+>- `WITHCOORD`: 将位置元素的经度和维度也一并返回。
+>- `WITHHASH`: 以 52 位有符号整数的形式， 返回位置元素经过原始==geohash== 编码的有序集合分值。 这个选项主要用于底层应用或者调试， 实际中的作用并不大。
+>- `ASC`: 根据中心的位置， 按照从近到远的方式返回位置元素。
+>- `DESC`: 根据中心的位置， 按照从远到近的方式返回位置元素。
+>- **COUNT `<count>`** 选项去获取前 N 个匹配元素，在对一个非常大的区域进行搜索时， 即使只使用 `COUNT` 选项去获取少量元素， 命令的执行速度也可能会非常慢。 但是从另一方面来说， 使用 `COUNT` 选项去减少需要返回的元素数量， 对于减少带宽来说仍然是非常有用的。
+
+```bash
+127.0.0.1:6379> GEORADIUS sicily 15 37 200 km WITHDIST ASC          #由近到远返回将(15,37)方圆200km内的地点，并标明两地的距离
+1) 1) "Catania"
+   2) "56.4413"
+2) 1) "Palermo"
+   2) "190.4424"
+127.0.0.1:6379> GEORADIUS sicily 15 37 200 km withcoord			#由远到近(默认)返回(15,37)方圆200km内的地点，并标明地点的经纬度
+1) 1) "Palermo"
+   2) 1) "13.36138933897018433"
+      2) "38.11555639549629859"
+2) 1) "Catania"
+   2) 1) "15.08726745843887329"
+      2) "37.50266842333162032" 
+127.0.0.1:6379> GEORADIUS sicily 15 37 200 km WITHDIST count 3   #获取(15,37)方圆200km内的最多三个地点，并标明直线距离
+1) 1) "Catania"
+   2) "56.4413"
+2) 1) "Palermo"
+   2) "190.4424"
+```
+
+查询==某个**地点**指定半径内所有的地理空间元素==的集合，
+
+==GEORADIUSBYMEMBER key member radius m|km|ft|mi [WITHCOORD] [WITHDIST] [WITHHASH] [COUNT count]==
+
+> GEORADIUSBYMEMBER 大体命名与上面的GEORADIUS相同
+
+```bash
+127.0.0.1:6379> GEORADIUSBYMEMBER sicily Agrigento 100 km       #查看“Agrigento”方圆100km的地点
+1) "Agrigento"
+2) "Palermo"
+```
+
+==查看所有==,-----> zset
+
+```bash
+127.0.0.1:6379> ZRANGE sicily 0 -1
+1) "Agrigento"
+2) "Palermo"
+3) "Catania"
+```
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 
 ##### hyperloglog
+
+
 
 ##### bitmaps
