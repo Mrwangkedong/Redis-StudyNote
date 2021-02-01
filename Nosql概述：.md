@@ -999,6 +999,81 @@ OK   #设置成功
 
 
 
+##### hyperloglog（基数）
+
+> 什么是基数？
+
+A{1,2,3,4,5,4}   B{1,2,3,4,5}
+
+基数（不重复的元素） = 5，可以接受误差
+
+> 简介
+
+Redis2.8.9更新了hyperloglog数据结构！
+
+Redis Hyperloglog 基数统计算法！
+
+优点：占用内存是固定的，2^64不同的元素的基数，只需要12kb内存！如果从内存角度比较，首选！！
+
+**网页的UV（一个人访问一个网站多次，但是还是算作一个人！）**
+
+传统方式：set保存用户id，然后保存set中的元素数量
+
+这个方式会消耗大量内存空间，我们是为了技术==计数，不是为了保存id。
+
+Hyperloglog  ，0.81%错误率是可以接受的！若是不允许出错，就用set
+
+> 基本操作命令！！！
+
+==添加==元素，==PFADD key element [element ...]==
+
+==查看基数==，==PFCOUNT key==
+
+==合并==，PFMERGE key1 key2 key3
+
+```bash
+127.0.0.1:6379> PFADD mykey a b c d e r f g d  #添加元素
+(integer) 1
+127.0.0.1:6379> PFCOUNT mykey      #添加了9个，但是d有两个，基数是8
+(integer) 8
+127.0.0.1:6379> PFADD mykey2 a oo pp   #想mykey2中添加元素
+(integer) 1
+127.0.0.1:6379> PFMERGE mykey2 mykey	#将key，key2合并到key2中去
+OK
+127.0.0.1:6379> PFCOUNT mykey2     #统计key2的基数， a b c d e r f g oo pp
+(integer) 10
+```
+
+##### bitmaps（位存储）
+
+> 0 1 0 1 1 0 0
+
+Bitmaps 位图，数据结构！都是操作二进制来进行记录，就只有0 1 两个状态……
+
+> 测试
+
+```bash
+#SETBIT key offset value(0/1)
+127.0.0.1:6379> SETBIT sign 1 0       #添加新纪录
+(integer) 0
+127.0.0.1:6379> SETBIT sign 0 1      #添加新纪录
+(integer) 0
+127.0.0.1:6379> SETBIT sign 2 1      #添加新纪录
+(integer) 0
+127.0.0.1:6379> SETBIT sign 3 0      #添加新纪录
+(integer) 0
+127.0.0.1:6379> GETBIT sign 1      #查看offset=1的value
+(integer) 0
+127.0.0.1:6379> GETBIT sign 0      #添加offset=0的value
+(integer) 1
+```
+
+==统计操作==value=1，==BITCOUNT key==
+
+```bash
+127.0.0.1:6379> BITCOUNT sign
+(integer) 3
+```
 
 
 
@@ -1010,11 +1085,3 @@ OK   #设置成功
 
 
 
-
-
-
-##### hyperloglog
-
-
-
-##### bitmaps
