@@ -1075,6 +1075,225 @@ Bitmaps 位图，数据结构！都是操作二进制来进行记录，就只有
 (integer) 3
 ```
 
+### 事务
+
+##### 事务执行
+
+原子性：要么同时成功，要么同时失败！（关系型数据库）
+
+> **Redis单条命令保证原子性，但是事务不保证原子性！！**
+>
+> Redis事务：一组命令的集合！一个食物中的所有命令会被序列化，在事务执行过程中，会按照顺序（队列）执行！
+>
+> 一次性、顺序性、排他性---执行一系列命令
+
+==Redis没有隔离级别的概念==，所有命令在事务中，并没有直接被执行！只有发起执行命令的时候才会执行！Exec
+
+```bash
+#隔离级别
+SQL标准定义了4类隔离级别，包括了一些具体规则，用来限定事务内外的哪些改变是可见的，哪些是不可见的。低级别的隔离级一般支持更高的并发处理，并拥有更低的系统开销。
+1、Read Uncommitted（读取未提交内容）
+2、Read Committed（读取提交内容）
+3、Repeatable Read（可重读）
+4、Serializable（可串行化）
+```
+
+在MySQL中，实现了这四种隔离级别，分别有可能产生问题如下所示：
+
+![img](https://img2018.cnblogs.com/blog/1646034/201904/1646034-20190430095830286-1397235000.png)
+
+Redis的事务：
+
+开启事务（multi）
+
+命令入队
+
+执行事务（exec）
+
+> 正常执行事务
+
+```bash
+127.0.0.1:6379> MULTI              #开启事务
+OK
+127.0.0.1:6379> set k1 v1		#添加元素
+QUEUED	     #加入队列
+127.0.0.1:6379> set k2 v2		#添加元素
+QUEUED   #加入队列
+127.0.0.1:6379> set k3 v3		#添加元素
+QUEUED   #加入队列
+127.0.0.1:6379> GET k2		#获取key=k2的value
+QUEUED   #加入队列
+127.0.0.1:6379> set k3 vv		#更新kv
+QUEUED   #加入队列
+127.0.0.1:6379> exec      #执行事务
+1) OK
+2) OK
+3) OK
+4) "v2"
+5) OK
+```
+
+> 放弃事务（DISCARD）
+
+```bash
+127.0.0.1:6379> MULTI              #开启事务
+OK
+127.0.0.1:6379> set k1 v1		#添加元素
+QUEUED   #加入队列
+127.0.0.1:6379> set k2 v2		#添加元素
+QUEUED   #加入队列
+127.0.0.1:6379> EXEC		  #执行事务
+1) OK
+2) OK
+127.0.0.1:6379> MULTI            #开启事务
+OK
+127.0.0.1:6379> set k3 v3		#添加元素
+QUEUED
+127.0.0.1:6379> DISCARD		#取消上面的事务
+OK
+127.0.0.1:6379> EXEC		#出错，表明上面的multl被取消了
+(error) ERR EXEC without MULTI
+```
+
+> 编译型异常（代码有问题！命令有错！），事务中所有的命名都不会执行
+
+```bash
+127.0.0.1:6379> MULTI            #开启事务
+OK
+127.0.0.1:6379> set k1 v1		#添加元素
+QUEUED
+127.0.0.1:6379> set k2 v2		#添加元素
+QUEUED
+127.0.0.1:6379> getset k2 v2        #getset key value
+QUEUED
+127.0.0.1:6379> getset k2      #错误命令
+(error) ERR wrong number of arguments for 'getset' command     #报错
+127.0.0.1:6379> getset k3 v3   		#添加元素
+QUEUED
+127.0.0.1:6379> EXEC        #执行
+(error) EXECABORT Transaction discarded because of previous errors.  #报错
+127.0.0.1:6379> get k1        #错误前面的命令也没有被执行
+(nil)
+```
+
+> 运行时异常（1/0），如果事务队列中存在语法性，那么执行命令的时候，其他命令可以正常执行！，错误命令抛出异常
+
+```bash
+127.0.0.1:6379>  MULTI            #开启事务
+OK
+127.0.0.1:6379> set k1 v1		#添加元素
+QUEUED
+127.0.0.1:6379> set k2 v2		#添加元素
+QUEUED
+127.0.0.1:6379> INCR k1       #k1--value++ ,因为v1不是数字，所以执行时会报错。但是不是语法错误
+QUEUED
+127.0.0.1:6379> set k3 v3 		#在运行错误之后继续添加元素
+QUEUED
+127.0.0.1:6379> MGET k1 k3    #获得k1,k3的值
+QUEUED
+127.0.0.1:6379> EXEC          #执行
+1) OK                
+2) OK
+3) (error) ERR value is not an integer or out of range         #第三步报错
+4) OK
+5) 1) "v1"
+   2) "v3"
+
+```
+
+##### 事务监控
+
+> **悲观锁**：
+>
+> - 认为什么时候都会出问题，无论做什么都会加锁
+
+
+
+> **乐观锁**：
+>
+> - 很乐观，认为什么时候都不会出问题，所以不会上锁！更新数据的时候去判断一下，在此期间是否有人修改过这个数据。
+> - 获取version
+> - 更新时候比较version
+
+
+
+==正常执行成功！==
+
+```bash
+127.0.0.1:6379> set money 100           #设置有100元
+OK	
+127.0.0.1:6379> set out 0		#设置花掉0元
+OK
+127.0.0.1:6379> WATCH money     #监控money
+OK
+127.0.0.1:6379> MULTI		#开启事务，正常情况下，没有其他线程对money，out进行操作。
+OK
+127.0.0.1:6379> DECRBY money 20		#money减少20
+QUEUED
+127.0.0.1:6379> INCRBY out 20		#out增加20
+QUEUED
+127.0.0.1:6379> exec          #执行
+1) (integer) 80
+2) (integer) 20
+```
+
+
+
+==在执行期间，另一个线程对value进行改变==
+
+```bash
+127.0.0.1:6379> set money 100               #设置有100元
+OK
+127.0.0.1:6379> set out 0          #设置花费0元
+OK
+127.0.0.1:6379> MULTI      #开启事务
+OK
+###
+###在事务中间另一个线程改变了money的值，set money 1000
+###
+127.0.0.1:6379> DECRBY money 10
+QUEUED
+127.0.0.1:6379> INCRBY out 10
+QUEUED
+127.0.0.1:6379> exec       #执行，发现money按照1000，进行改变
+1) (integer) 990
+2) (integer) 10
+```
+
+在事务之前加上==监视==
+
+```bash
+127.0.0.1:6379> WATCH money        #进行监视
+OK
+127.0.0.1:6379> MULTI	     #开启事务
+OK
+###
+###在事务中间另一个线程改变了money的值，set money 1000
+###
+127.0.0.1:6379> DECRBY money 10
+QUEUED
+127.0.0.1:6379> INCRBY out 10
+QUEUED
+127.0.0.1:6379> exec         #执行，发现输出为空，说明事务没有被执行
+(nil)
+```
+
+加锁导致事务失败
+
+![image-20210203153841980](C:\Users\Cristiano-Ronaldo\AppData\Roaming\Typora\typora-user-images\image-20210203153841980.png)
+
+
+
+
+
+
+
+
+
+
+
+
+
 
 
 
