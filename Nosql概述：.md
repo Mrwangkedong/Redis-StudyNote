@@ -1284,6 +1284,435 @@ QUEUED
 
 
 
+### Jedis
+
+使用java操作Redis
+
+> 什么是jredis，是redis官方推荐的java连接开发工具
+
+> 测试
+
+1、导入相应的依赖
+
+```xml
+  <dependencies>
+<!--    导入JRedis包-->
+      <dependency>
+            <groupId>redis.clients</groupId>
+            <artifactId>jedis</artifactId>
+            <version>3.2.0</version>
+        </dependency>
+
+
+<!--        fastjson-->
+        <dependency>
+            <groupId>com.alibaba</groupId>
+            <artifactId>fastjson</artifactId>
+            <version>1.2.62</version>
+        </dependency>
+
+    </dependencies>
+```
+
+2、编码测试
+
+- 连接数据库
+
+```java
+Jedis jedis = new Jedis("121.36.0.84",6379);
+System.out.println(jedis);
+//redis.clients.jedis.Jedis@2ff4acd0
+```
+
+- 操作命令(Jedis的所有指令就是我们之前学习的所有指令)
+
+```java
+//获取全部keys
+Set<String> keys = jedis.keys("*");
+System.out.println("当前全部keys: \n"+keys);
+```
+
+- 断开连接
+
+```java
+//断开连接
+jedis.close();
+```
+
+##### 常用API
+
+> 就是上面对应的操作 
+
+- string
+- list
+- set
+- hash
+- zset
+
+> 事务
+
+### SpringBoot整合
+
+SpringBoot操作数据：spring-data  jpa  jdbc  mongodb  redis
+
+> **整合测试**
+
+说明：在springboot2.x之后，原来是用的==jedis换成了lettuce==
+
+jedis：采用的是直连，多个线程操作的话，是不安全的。如果避免不安全，使用jedis pool连接池！Bio模式！
+
+lettuce：采用netty，实例可以在多个线程中进行共享，不存在线程不安全的情况！ 可以减少线程的数量，Nio模式
+
+源码分析：
+
+```java
+public class RedisAutoConfiguration {
+    public RedisAutoConfiguration() {
+    }
+
+    @Bean
+    @ConditionalOnMissingBean(
+        name = {"redisTemplate"}
+    )   //我们可以自定义一个redisTemplate来进行替换这个默认的！
+    public RedisTemplate<Object, Object> redisTemplate(RedisConnectionFactory redisConnectionFactory) throws UnknownHostException {
+        //默认的RedisTemplate没有过多的设置，redis对象都是需要序列化！
+        //两个泛行都是Object，Object类型，我们后面使用需要强制转化<string,Object>
+        RedisTemplate<Object, Object> template = new RedisTemplate();
+        template.setConnectionFactory(redisConnectionFactory);
+        return template;
+    }
+
+    @Bean
+    @ConditionalOnMissingBean    //由于string是最常用的，所以单独提出一个bean
+    public StringRedisTemplate stringRedisTemplate(RedisConnectionFactory redisConnectionFactory) throws UnknownHostException {
+        StringRedisTemplate template = new StringRedisTemplate();
+        template.setConnectionFactory(redisConnectionFactory);
+        return template;
+    }
+}
+
+```
+
+##### 导入依赖
+
+```java
+<dependency>
+            <groupId>org.springframework.boot</groupId>
+            <artifactId>spring-boot-starter-data-redis</artifactId>
+</dependency>
+```
+
+##### 配置连接
+
+```java
+spring.redis.host=121.36.0.84
+spring.redis.port=6379
+```
+
+##### 测试
+
+```java
+    @Test
+    void contextLoads() {
+        //redisTemplate
+        //opsForValue()   操作字符串  类似String
+        //opsForList()    操作List
+
+        //除了基本的操作，我们常用的操作都可以直接通过RedisTemplate进行实现，比如事务和基本的CRUD
+
+        //获取连接对象
+        RedisConnection connection = Objects.requireNonNull(redisTemplate.getConnectionFactory()).getConnection();
+//        connection.flushAll();
+//        connection.flushDb();
+        redisTemplate.opsForValue().set("k1","一二三");
+        System.out.println(redisTemplate.opsForValue().get("k1"));
+    }
+```
+
+##### 序列化
+
+![image-20210217221906215](C:\Users\Cristiano-Ronaldo\AppData\Roaming\Typora\typora-user-images\image-20210217221906215.png)
+
+
+
+![image-20210217222034403](C:\Users\Cristiano-Ronaldo\AppData\Roaming\Typora\typora-user-images\image-20210217222034403.png)
+
+==**直接传输对象会序列化的错误**==
+
+![image-20210217225042600](C:\Users\Cristiano-Ronaldo\AppData\Roaming\Typora\typora-user-images\image-20210217225042600.png)
+
+##### 自定义序列化
+
+```java
+ @Test
+    public void TestSeria() throws JsonProcessingException {
+        User user = new User("王柯栋", 18);
+        //将对象序列化为json
+        String userJson = new ObjectMapper().writeValueAsString(user);
+        //将对象写入redis
+        redisTemplate.opsForValue().set("user",userJson);
+        System.out.println(redisTemplate.opsForValue().get("user"));
+    }
+```
+
+> 未使用自定义序列化
+
+![image-20210217233320580](C:\Users\Cristiano-Ronaldo\AppData\Roaming\Typora\typora-user-images\image-20210217233320580.png)
+
+> 使用序列化
+
+![image-20210217233336827](C:\Users\Cristiano-Ronaldo\AppData\Roaming\Typora\typora-user-images\image-20210217233336827.png)
+
+
+
+### Redis.conf详解
+
+启动的时候通过配置文件来启动！（配置详细讲解：https://www.cnblogs.com/coder-lzh/p/9614244.html）
+
+> 单位，对大小写不敏感
+
+![image-20210218102055133](C:\Users\Cristiano-Ronaldo\AppData\Roaming\Typora\typora-user-images\image-20210218102055133.png)
+
+> 包含多个配置文件；include~~import
+
+![image-20210218102202693](C:\Users\Cristiano-Ronaldo\AppData\Roaming\Typora\typora-user-images\image-20210218102202693.png)
+
+> 网络
+
+
+
+```bash
+bind 127.0.0.1          #绑定的ip
+protected-mode yes      #保护模式
+port 6379 			#端口设置
+```
+
+> 通用配置
+
+```bash
+daemonize yes #以守护进程的方式运行，默认是no
+pidfile /var/run/redis_6379.pid      #如果以后台的方式运行，我们就需要指定一个pid文件！
+#日志
+#Specify the server verbosity level.
+#This can be one of：
+#debug（a lot of information，useful for development/testing） 测试/开发
+#verbose（many rarely useful info，but not a mess like the debug level）
+#notice（moderately verbose，what you want in production probably）   生产环境
+#warning（only very important/critical messages are logged）
+loglevel notice
+logfile “”		#日志文件地址 
+databases 16  #默认的数据库数量 
+```
+
+> 快照
+
+ 持久化，在规定的时间内执行了多少次操作 ，则会持久化到文件rdb.aof
+
+redis是内存数据库，如果没有持久化，那会数据断电即失！
+
+```bash
+#如果900s内，如果至少有一个1key进行了修改，我们及进行持久化操作
+save 900 1
+#如果300s内，如果至少10key进行了修改，我们及进行持久化操作
+save 300 10
+#如果60s内，如果至少10000key进行了修改，我们及进行持久化操作
+save 60 10000
+#我们之后学习持久化，会自己定义这个测试
+
+stop-writes-on-bgsave-error yes  #持久化如果出错，是否还需要继续工作
+
+rdbcompression yes  #是否压缩rdb文件，需要消耗一些cpu资源
+
+rdbchecksum yes#保存rdb文件的时候，进行错误的检查校验！
+
+dir./#rdb文件保存的目录！
+```
+
+> REPLICATION  复制
+
+
+
+docker run -v /home/userwkd/redis/data:/data -v /home/userwkd/redis/conf/redis.conf:/etc/redis/redis.conf -d -p 6379:6379 redis redis-server --appendonly yes --requirepass "wang0510"
+
+
+
+> 安全|SECURITY 
+
+```bash
+#在配置文件中设置密码
+# requirepass foobared
+requirepass 123456
+#在命令行中设置密码
+config set requirepass "123456"
+#获取redis命令
+config get requirepass
+```
+
+> 限制|CLIENTS
+
+```bash
+# maxclients 10000     #最大10000客户端数
+```
+
+> 内存设置
+
+```bash
+ maxmemory <bytes>   #最大内存容量
+ # maxmemory-policy noeviction  #内存达到上限后的处理策略
+    1、volatile-1ru：只对设置了过期时间的key进行LRU（默认值）
+    2、allkeys-1ru：删除1ru算法的key
+    3、volatile-random：随机删除即将过期key
+    4、allkeys-random：随机删除5、volatile-tt1：删除即将过期的6、noeviction：永不过期，返回错误
+```
+
+> APPEND ONLY MODE 模式  |  aof配置
+
+```bash
+appendonly no  #默认是不开启的，默认使用rdb持久化
+appendfilename "appendonly.aof"   #持久化文件名字
+# appendfsync always  #每次修改斗湖同步sync
+appendfsync everysec  #每秒执行一次同步sync，可能会丢失这1s的数据
+# appendfsync no    #不执行同步sync，这个时候操作系统自己同步数据，速度最快
+```
+
+具体的配置，在持久化中进行
+
+### Redis持久化
+
+Redis是内存数据库，如果不见内存中的数据状态保存到磁盘，那么一但服务器进程退出，服务器的数据库状态也会消失。所以Redis提供了持久化功能。
+
+在主从复制中，rdb就是备用了！
+
+##### RDB(Redis DataBase)
+
+> 什么是RDB
+
+![ ](C:\Users\Cristiano-Ronaldo\AppData\Roaming\Typora\typora-user-images\image-20210218115046855.png)
+
+
+
+在指定的时间间隔内将内存中的数据集快照写入磁盘，也就是行话讲的Snapshot快照，它恢复时是将快照文件直接读到内存里。
+
+Redis会单独创建（fork）一个子进程来进行持久化，会先将数据写入到一个临时文件中，待持久化过程都结束了，再用这个临时文件替换上次持久化好的文件。整个过程中，主进程是不进行任何I0操作的。这就确保了极高的性能。如果需要进行大规模数据的恢复，且对于数据恢复的完整性不是非常敏感，那RDB方式要比AOF 方式更加的高效。RDB的缺点是最后一次持久化后的数据可能丢失。我们默认的就是RDB，一般情况下不修改这个配置。
+
+有时候，在生产环境中，我们会对其进行备份。
+
+==rdb保存的默认文件是dump.rdb==
+
+==aof保存的默认文件时appendonly.aof==
+
+
+
+> 开启rdb持久化
+
+```bash
+127.0.0.1:6379> save
+OK
+127.0.0.1:6379> Set rdb rdb
+OK
+```
+
+![image-20210218121615983](C:\Users\Cristiano-Ronaldo\AppData\Roaming\Typora\typora-user-images\image-20210218121615983.png)
+
+> RDB快照保存策略
+
+![image-20210218223616845](C:\Users\Cristiano-Ronaldo\AppData\Roaming\Typora\typora-user-images\image-20210218223616845.png)
+
+> 触发机制
+
+ 1、save的规则满足的情况下，会自动触发rdb规则
+
+2、执行flushall命令，也会触发rdb规则
+
+3、退出redis，也会产生rdb文件！
+
+备份就会自动生成**dump.rdb**
+
+> 如何恢复rdb文件！
+
+ 1、只需将rdb文件放在我们redis启动目录就可以，redis启动时就会自动检查dump.rdb，恢复其中的数据
+
+2、查看需要存在的位置
+
+```bash
+127.0.0.1:6379> CONFIG GET dir
+1) "dir"
+2) "/etc"          #如果在这个目录下存在dump.rdb文件，启动就会自动恢复其中的数据。
+```
+
+> 优点/缺点
+
+优点：
+
+- 适合大规模的数据恢复！
+- 如果对数据的完整行要求不高！
+
+缺点：
+
+- 需要一定的时间间隔进程操作！如果redis意外宕机了，这个最后一次修改的数据就没了。
+- fork进程的时候，会占用一定的内存空间
+
+##### AOF(Append Only File)
+
+将我们的所有命令记录下来，history，恢复的时候就把这个文件全部执行一遍！
+
+> AOF是什么？
+
+![image-20210218225747282](C:\Users\Cristiano-Ronaldo\AppData\Roaming\Typora\typora-user-images\image-20210218225747282.png)
+
+
+
+以日志的形式来记录每个写操作，将Redis执行过的所有指令记录下来（**读操作不记录**），只许追加文件但不可以改写文件，redis启动之初会读取该文件重新构建数据，换言之，redis重启的话就根据日志文件的内容将写指令从前到后执行一次以完成数据的恢复工作
+
+==Aof保存的是appendonly.aof文件==
+
+![image-20210218230242630](C:\Users\Cristiano-Ronaldo\AppData\Roaming\Typora\typora-user-images\image-20210218230242630.png)
+
+```bash
+appendonly 默认是不开启的。需要手动开启
+重启，redis 就可以生效了！
+如果这个aof文件有错位，这时候redis是启动不起来的吗，我们需要修复这个aof文件
+redis给我们提供了一个工具--redis-check-aof  --fix
+```
+
+> 优点|缺点
+
+优点：
+
+- 每一次修改，都同步，文件完整性会更好
+- 每秒同步一次，可能会丢失一秒的数据
+- 从不同步，效率是最高的
+
+缺点：
+
+- 相对于数据文件来说，aof远远大于rdb，修复的速度也慢与rdb。
+- aof运行效率也要比rdb慢，所以默认是rdb持久化
+
+> 重写规则
+
+aof默认就是文件的无限追加。文件越来越大
+
+![image-20210218232709614](C:\Users\Cristiano-Ronaldo\AppData\Roaming\Typora\typora-user-images\image-20210218232709614.png)
+
+##### 扩展
+
+1、RDB持久化方式能够在指定的时间间隔内对你的数据进行快照存储
+
+2、AOF持久化方式记录每次对服务器写的操作，当服务器重启的时候会重新执行这些命令来恢复原始的数据，AOF命令以Redis协议追加保存每次写的操作到文件未尾，Redis还能对AOF文件进行后台重写，使AOF文件的体积不至于过大。
+
+3、只做缓存，如果你只希望你的数据在服务器运行的时候存在，你也可以不使用任何持久化
+
+4、同时开启两种持久化方式
+
+- 在这种情况下，当redis重启的时候会优先载入AOF文件来恢复原始的数据，因为在通常情况下AOF文件保存的数据集要比RDB文件保存的数据集要完整。
+- RDB的数据不实时，同时使用两者时服务器重启也只会找AOF文件，那要不要只使用AOF呢？作者建议不要，因为RDB更适合用于备份数据库（AOF在不断变化不好备份），快速重启，而且不会有AOF可能潜在的Bug，留着作为一个万一的手段。
+
+5、性能建议
+
+- 因为RDB文件只用作后备用途，建议只在Slave上持久化RDB文件，而且只要15分钟备份一次就够了，只保留 save9001这条规则。
+- 如果Enable AOF，好处是在最恶劣情况下也只会丢失不超过两秒数据，启动脚本较简单只load自己的AOF文件就可以了，代价一是带来了持续的IO，二是AOF rewrite的最后将 rewrite过程中产生的新数据写到新文件造成的阻塞几乎是不可避免的。只要硬盘许可，应该尽量减少AOF rewrite的频率，AOF重写的基础大小默认值64M太小了，可以设到5G以上，默认超过原大小100%大小重写可以改到适当的数值。
+- 如果不Enable AOF，仅靠Master-Slave Repllcation 实现高可用性也可以，能省掉一大笔IO，也减少了rewrite时带来的系统波动。代价是如果Master/Slave同时倒掉，会丢失十几分钟的数据，启动脚本也要比较两个Master/Slave中的RDB文件，载入较新的那个，微博就是这种架构。
+
 
 
 
