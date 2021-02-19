@@ -1709,13 +1709,23 @@ aof默认就是文件的无限追加。文件越来越大
 
 5、性能建议
 
-- 因为RDB文件只用作后备用途，建议只在Slave上持久化RDB文件，而且只要15分钟备份一次就够了，只保留 save9001这条规则。
+- 因为RDB文件只用作后备用途，建议只在Slave上持久化RDB文件，而且只要15分钟备份一次就够了，只保留 **save 900 1**这条规则。
 - 如果Enable AOF，好处是在最恶劣情况下也只会丢失不超过两秒数据，启动脚本较简单只load自己的AOF文件就可以了，代价一是带来了持续的IO，二是AOF rewrite的最后将 rewrite过程中产生的新数据写到新文件造成的阻塞几乎是不可避免的。只要硬盘许可，应该尽量减少AOF rewrite的频率，AOF重写的基础大小默认值64M太小了，可以设到5G以上，默认超过原大小100%大小重写可以改到适当的数值。
 - 如果不Enable AOF，仅靠Master-Slave Repllcation 实现高可用性也可以，能省掉一大笔IO，也减少了rewrite时带来的系统波动。代价是如果Master/Slave同时倒掉，会丢失十几分钟的数据，启动脚本也要比较两个Master/Slave中的RDB文件，载入较新的那个，微博就是这种架构。
 
 
 
+### Redis发布订阅
 
+Redis发布订阅(pub/sub)是一种消息通信模式“发送者（pub）发送消息，订阅者（sub）接收消息。
+
+Redis客户端可以订阅任意数量的频道。
+
+订阅/发布消息图：
+
+第一个：消息发送者，第二个：频道，第三个：消息订阅者
+
+![image-20210219110021940](C:\Users\Cristiano-Ronaldo\AppData\Roaming\Typora\typora-user-images\image-20210219110021940.png)
 
 
 
