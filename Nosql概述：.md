@@ -1727,11 +1727,55 @@ Redis客户端可以订阅任意数量的频道。
 
 ![image-20210219110021940](C:\Users\Cristiano-Ronaldo\AppData\Roaming\Typora\typora-user-images\image-20210219110021940.png)
 
+> **订阅**
+
+```bash
+#订阅频道    SUBSCRIBE channelName
+127.0.0.1:6379> SUBSCRIBE wkdchannel
+Reading messages... (press Ctrl-C to quit)
+1) "subscribe"
+2) "wkdchannel"
+3) (integer) 1
+1) "message"
+2) "wkdchannel"
+3) "Hello!!!"
+1) "message"
+2) "wkdchannel"
+3) "comcomcom"
+```
 
 
 
+```bash
+#订阅频道    SUBSCRIBE channelName
+127.0.0.1:6379> SUBSCRIBE wkdchannel 
+Reading messages... (press Ctrl-C to quit)
+1) "subscribe"        #订阅
+2) "wkdchannel"			#频道wkdchannel
+3) (integer) 1
+1) "message"		#消息提示
+2) "wkdchannel"		#频道
+3) "comcomcom"		#内容
+```
 
 
+
+```bash
+#发布信息   PUBLISH channel message
+127.0.0.1:6379> PUBLISH wkdchannel Hello!!!
+(integer) 1
+127.0.0.1:6379> PUBLISH wkdchannel comcomcom
+(integer) 2
+```
+
+
+
+> 使用场景
+
+- 实时消息系统
+- 实时聊天（频道当做聊天室，将信息回显给所有人）
+- 订阅，关注系统都是可以的
+- 稍微负责点的，我们可以用消息中间件来实现
 
 
 
