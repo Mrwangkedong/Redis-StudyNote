@@ -1534,6 +1534,8 @@ dir./#rdb文件保存的目录！
 
 docker run -v /home/userwkd/redis/data:/data -v /home/userwkd/redis/conf/redis.conf:/etc/redis/redis.conf -d -p 6379:6379 redis redis-server --appendonly yes --requirepass "wang0510"
 
+docker exec -it ed18 redis-cli
+
 
 
 > 安全|SECURITY 
@@ -1776,6 +1778,140 @@ Reading messages... (press Ctrl-C to quit)
 - 实时聊天（频道当做聊天室，将信息回显给所有人）
 - 订阅，关注系统都是可以的
 - 稍微负责点的，我们可以用消息中间件来实现
+
+### Redis主从复制
+
+##### 概念
+
+主从复制，是指将一台Redis服务器的数据，复制到其他的Redis服务器。前者称为主节点（master/leader），后者称为从节点（slave/follower）；
+
+数据的==复制是单向==的，只能由主节点到从节点。==aster以写为主，Slave以读为主==。默认情况下，每台Redis服务器都是主节点；且一个主节点可以有多个从节点（或没有从节点），但一个从节点只能有一个主节点。
+主从复制的==作用主要==包括：
+1、数据冗余：主从复制实现了数据的热备份，是持久化之外的一种数据冗余方式。
+2、故障恢复：当主节点出现问题时，可以由从节点提供服务，实现快速的故障恢复；实际上是一种服务的冗余。
+3、负载均衡：在主从复制的基础上，配合==读写分离==，可以由**主节点提供写服务，由从节点提供读服务**（即写Redis数据时应用连接主节点，读Redis数据时应用连接从节点），分担服务器负载；尤其是在写少读多的场景下，通过多个从节点分担读负载，可以大大提高Redis服务器的并发量。
+4、高可用（集群）基石：除了上述作用以外，主从复制还是哨兵和集群能够实施的基础，因此说主从复制是Redis高可用的基础。
+
+
+
+一般来说，要将Redis运用于工程项目中，只使用一台Redis是万万不能的（宕机），原因如下：
+1.从==结构==上，第个Redis服务器会发生单点故赠，并且一台服务然需要处理所有的请求负载，压力较大；
+2.从==容量==上，单个Redis服务器内存容量有限，就第一台Redis服务器内存容量为256G，也不能将所有内存用作Redis存储内存，一般来说，单台Redis最大使用内存不应该超过206。
+电商网站上的商品，一般都一次上传，无数次浏览的，说专业点也就是“多读少写”。
+
+对于这种场原，我们可以使如下这种架构：
+
+<img src="C:\Users\Cristiano-Ronaldo\AppData\Roaming\Typora\typora-user-images\image-20210220114948798.png" alt="image-20210220114948798" style="zoom:67%;" />
+
+主从复制，读写分离！80%的情况下都是在进行读操作！缓解服务器压力，架构中经常使用，一主二从。
+
+
+
+##### 环境配置
+
+只配置从库，不用配置主库（因为redis默认自己就是主库）。
+
+```bash
+#查看当前库的信息
+127.0.0.1:6379> INFO replication
+# Replication
+role:master   #角色
+connected_slaves:0  #没有从机
+master_replid:70b81b37b11c7c8c0c2c2e4700ec43051f275bfa
+master_replid2:0000000000000000000000000000000000000000
+master_repl_offset:0
+second_repl_offset:-1
+repl_backlog_active:0
+repl_backlog_size:1048576
+repl_backlog_first_byte_offset:0
+repl_backlog_histlen:0
+```
+
+
+
+![image-20210220122540568](C:\Users\Cristiano-Ronaldo\AppData\Roaming\Typora\typora-user-images\image-20210220122540568.png)
+
+
+
+##### 一主二从
+
+默认情况下，每台Redis服务器都是主节点；一般情况下我们只要配置从机就好了。
+
+认老大！主（79）从（80/81）
+
+==**由从机上进行配置（SLAVEOF）**==
+
+```bash
+#salver1  172.17.0.2  6379 ----->   6379
+127.0.0.1:6379> SLAVEOF 172.17.0.4 6379
+OK
+127.0.0.1:6379> INFO replication
+# Replication
+role:slave
+master_host:172.17.0.4
+master_port:6379
+master_link_status:up
+#slaver2  172.17.0.3  6379 ----->   6380
+127.0.0.1:6379> SLAVEOF 172.17.0.4 6379
+OK
+127.0.0.1:6379> INFO replication
+# Replication
+role:slave
+master_host:172.17.0.4
+master_port:6379
+master_link_status:up
+#主机INFO
+127.0.0.1:6379> INFO replication
+# Replication
+role:master        #角色
+connected_slaves:2      #从机个数
+slave0:ip=172.17.0.3,port=6379,state=online,offset=32756,lag=0
+slave1:ip=172.17.0.2,port=6379,state=online,offset=32756,lag=1
+```
+
+
+
+==**主写从读**==
+
+```bash
+172.17.0.3:6379> set k1 v1     #master
+OK
+172.17.0.2:6379> keys *   #slaver
+1) "k1
+172.17.0.4:6379> keys *		#slaver
+1) "k1
+```
+
+
+
+真实的主从配置应该是在配置文件中配置，这样的话是永久的，我们这里使用的是命令，暂时的！！！
+
+![image-20210220222112051](C:\Users\Cristiano-Ronaldo\AppData\Roaming\Typora\typora-user-images\image-20210220222112051.png)
+
+> 细节
+
+1、主机可以写，从机不能。所有的主机信息都会自动备份到从机。
+
+```bash
+127.0.0.1:6379> set k3 v3
+(error) READONLY You can't write against a read only replica.
+```
+
+2、主机下线之后，从机依旧连接到主机。但是没有写操作
+
+​		主机回来之后，一切如旧。
+
+3、【命令行状态下】从机宕机之后，**主机上的salve就减去一**，在这个期间，主机上写入的，从机再次上线之后不能读了。
+
+那是因为，**命令行状态下**的从机宕机后再上线就恢复了主机身份
+
+
+
+
+
+
+
+
 
 
 
