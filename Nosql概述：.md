@@ -1534,6 +1534,8 @@ dir./#rdb文件保存的目录！
 
 docker run -v /home/userwkd/redis/data:/data -v /home/userwkd/redis/conf/redis.conf:/etc/redis/redis.conf -d -p 6379:6379 redis redis-server --appendonly yes --requirepass "wang0510"
 
+docker run -v /home/userwkd/redis/data6382:/data -d -p 6382:6379 redis redis-server --appendonly yes 
+
 docker exec -it ed18 redis-cli
 
 
@@ -1905,15 +1907,151 @@ OK
 
 那是因为，**命令行状态下**的从机宕机后再上线就恢复了主机身份
 
+> 复制原理
+
+Slave 启动成功连接到master 后会发送一个sync同步命令。
+
+Master 接到命令，启动后台的存盘进程，同时收集所有接收到的用于修改数据集命令，在后台进程执行完毕之后，master将传送整个数据文件到slave，并完成一次完全同步。
+
+==全量复制==：而slave服务在接收到数据库文件数据后，将其存盘并加载到内存中。
+
+==增量复制==：Master继续将新的所有收集到的修改命令依次传给slave，完成同步但是只要是重新连接master，一次完全同步（全量复制）将被自动执行！我们的数据一定可以在从机中看到！|
+
+但是只要是重新连接master，一次完全同步（全量复制）将会被执行！我们的数据一定可以在从机中看到。
+
+**redis在变成从机之后，之前自己的数据也消失了！！！**
+
+> 层层链路模型
+
+第二个即使前一个的从机，又是后一个的主机。这个时候可以主从复制。
+
+![image-20210220225747883](C:\Users\Cristiano-Ronaldo\AppData\Roaming\Typora\typora-user-images\image-20210220225747883.png)
 
 
 
+> 如果最大的master没有了，必须把中间的redis变成master。
+
+==没有哨兵模式之前==
+
+```bash
+#手动把其中一个变成master，如果老大修复了，需要重新配置
+72.17.0.3:6379> SLAVEOF no one
+OK
+172.17.0.3:6379> INFO replication
+# Replication
+role:master
+connected_slaves:1
+slave0:ip=172.17.0.2,port=6379,state=online,offset=49930,lag=0
+master_replid:708682ab964c8764412df702b3bf8d6ca165f91b
+master_replid2:05cde426fc0d47f4a383938f69d83024905f5c34
+master_repl_offset:49930
+second_repl_offset:49931
+repl_backlog_active:1
+repl_backlog_size:1048576
+repl_backlog_first_byte_offset:1
+repl_backlog_histlen:49930
+```
+
+##### 哨兵模式
+
+（主动选举老大模式）
+
+> 概述
+
+主从切换技术的方法是：当主服务器宕机后，需要手动把一台从服务器切换为主服务器，这就需要人工干预，费事费力，还会造成一段时间内服务不可用。这不是一种推荐的方式，更多时候，我们优先考虑哨兵模式，Redis从2.8开始正式提供了Sentinel（哨兵）架构来解决这个问题。
+
+谋朝篡位的自动版，能够后台监控主机是否故障，如果故障了根据投票数==自动将从库转换为主库==。
+
+哨兵模式是一种特殊的模式，首先Redis提供了哨兵的命令，哨兵是一个独立的进程，作为进程，它会独立运行。其原理是**哨兵通过发送命令，等待Redis服务器响应，从而监控运行的多个Redis实例**。
+
+**单哨兵模式**
+
+<img src="C:\Users\Cristiano-Ronaldo\AppData\Roaming\Typora\typora-user-images\image-20210222220219452.png" alt="image-20210222220219452" style="zoom:80%;" />
+
+**多哨兵模式**
+
+<img src="C:\Users\Cristiano-Ronaldo\AppData\Roaming\Typora\typora-user-images\image-20210222220451032.png" alt="image-20210222220451032" style="zoom:80%;" />
+
+​	假设==主服务器宕机==，哨兵1先检测到这个结果，系统并不会马上进行failover过程，仅仅是哨兵1主观的认为主服务器不可用，这个现象成为**主观下线**。当后面的哨兵也检测到主服务器不可用，并且==数量达到一定值时，那么哨兵之间就会进行一次投票==，投票的结果由一个哨兵发起，进行failover[故障转移]操作。切换成功后，就会通过发布订阅模式，让各个哨兵把自己监控的从服务器实现切换主机，这个过程称为**客观下线**。
+
+> ==sdown是主观宕机==，就一个哨兵如果自己觉得一个master宕机了，那么就是主观宕机
+>
+> ==odown是客观宕机==，如果quorum数量的哨兵都觉得一个master宕机了，那么就是客观宕机
 
 
 
+> 测试
 
+目前状态：一主二从。
 
+1、配置哨兵配置文件sentinel.conf
 
+```bash
+#sentinel monitor 被监控名称 ip port 1
+#后面这个数字1，表示主机挂了，slave投票看让谁接替成为主机，票数最多的，就会成为主机。
+sentinel monitor myredis 172.17.0.4 6379 1
+```
+
+2、启动哨兵
+
+```bash
+[root@ecs-sn3-medium-2-linux-20191114204335 redis]# docker exec -it redis6381 redis-sentinel /etc/redis/sentinel.conf
+29:X 22 Feb 2021 15:04:23.841 # oO0OoO0OoO0Oo Redis is starting oO0OoO0OoO0Oo
+29:X 22 Feb 2021 15:04:23.841 # Redis version=6.0.10, bits=64, commit=00000000, modified=0, pid=29, just started
+29:X 22 Feb 2021 15:04:23.841 # Configuration loaded
+                _._                                                  
+           _.-``__ ''-._                                             
+      _.-``    `.  `_.  ''-._           Redis 6.0.10 (00000000/0) 64 bit
+  .-`` .-```.  ```\/    _.,_ ''-._                                   
+ (    '      ,       .-`  | `,    )     Running in sentinel mode
+ |`-._`-...-` __...-.``-._|'` _.-'|     Port: 26379 
+ |    `-._   `._    /     _.-'    |     PID: 29
+  `-._    `-._  `-./  _.-'    _.-'                                   
+ |`-._`-._    `-.__.-'    _.-'_.-'|                                  
+ |    `-._`-._        _.-'_.-'    |           http://redis.io        
+  `-._    `-._`-.__.-'_.-'    _.-'                                   
+ |`-._`-._    `-.__.-'    _.-'_.-'|                                  
+ |    `-._`-._        _.-'_.-'    |                                  
+  `-._    `-._`-.__.-'_.-'    _.-'                                   
+      `-._    `-.__.-'    _.-'                                       
+          `-._        _.-'                                           
+              `-.__.-'                                               
+
+29:X 22 Feb 2021 15:04:23.842 # WARNING: The TCP backlog setting of 511 cannot be enforced because /proc/sys/net/core/somaxconn is set to the lower value of 128.
+29:X 22 Feb 2021 15:04:23.852 # Sentinel ID is f2af394022ceb7a2dfff19a5068a852808326249
+29:X 22 Feb 2021 15:04:23.852 # +monitor master myredis 172.17.0.4 6379 quorum 1
+29:X 22 Feb 2021 15:04:23.852 * +slave slave 172.17.0.2:6379 172.17.0.2 6379 @ myredis 172.17.0.4 6379
+29:X 22 Feb 2021 15:04:23.858 * +slave slave 172.17.0.3:6379 172.17.0.3 6379 @ myredis 172.17.0.4 6379
+```
+
+==当主机宕机之后==
+
+![image-20210222232930572](C:\Users\Cristiano-Ronaldo\AppData\Roaming\Typora\typora-user-images\image-20210222232930572.png)
+
+```bash
+25:X 22 Feb 2021 15:22:58.880 * +convert-to-slave slave 172.17.0.4:6379 172.17.0.4 6379 @ myredis 172.17.0.3 6379
+#主机由172.17.0.4转化为172.17.0.3
+```
+
+如果此时主机回来，只能归并到新的主机之下，当做从机。这就是哨兵模式的规则！！！
+
+> 哨兵模式**优缺点**
+
+优点：
+
+1、哨兵集群，基于主从复制模式，所有的主从配置优点他都有。
+
+2、主从可以切换，故障可以转移，系统可用性好
+
+3、哨兵模式就是主从模式的升级，手动到自动，更加健壮。
+
+缺点：
+
+1、热到死不好扩容，集群容量一旦到达上限，在线扩容就十分麻烦。
+
+2、实现哨兵模式的配置其实是十分麻烦的，里面有很多选择。
+
+> 哨兵模式的全部配置-----sentinel.conf
 
 
 
